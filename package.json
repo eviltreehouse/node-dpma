@@ -1,6 +1,6 @@
 {
   "name": "node-dpma",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Dynamic Platform Module Awareness",
   "main": "dpma.js",
   "scripts": {
