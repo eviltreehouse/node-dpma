@@ -1,0 +1,19 @@
+{
+  "name": "node-dpma",
+  "version": "0.1.0",
+  "description": "Dynamic Platform Module Awareness",
+  "main": "dpma.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eviltreehouse/node-dpma.git"
+  },
+  "author": "Corey Sharrah <corey@eviltreehouse.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/eviltreehouse/node-dpma/issues"
+  },
+  "homepage": "https://github.com/eviltreehouse/node-dpma#readme"
+}
