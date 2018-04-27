@@ -12,8 +12,10 @@ const fs = require('fs');
  * @param {string} lib 
  * @param {string} [lib_path="."] 
  * @param {string} [module_id] 
+ * @param {string} [global_ref_string] 
+ * @return {Object}
  */
-function Dpma(lib, lib_path, module_id) {
+function Dpma(lib, lib_path, module_id, global_ref_string) {
     if (! lib) throw new Error("No lib specified");
     if (! lib_path) lib_path = ".";
     
@@ -32,6 +34,22 @@ function Dpma(lib, lib_path, module_id) {
     module_paths.push( path.join(lib_path, agn_module_name) );
     if (module_id) module_paths.push( path.join(".", 'node_modules', module_id, lib_path, agn_module_name ) );
 
+    var global_refs = parseGlobalRefs(global_ref_string);
+    if (module_id && global_refs[module_id]) {
+        // Our Dpma-enabled module is actually be used by a secondary module
+        // use its module directories as well.
+        var ref_path = ['node_modules'];
+        for (var ref_module of global_refs[module_id]) {
+            ref_path.push(ref_module);
+            ref_path.push('node_modules'); 
+        }
+
+        ref_path.push(module_id, lib_path);
+
+        module_paths.push( path.join.apply(path, [].concat(ref_path, module_name)) );
+        module_paths.push( path.join.apply(path, [].concat(ref_path, agn_module_name )) );
+    }
+
     var tries = [].concat(module_paths);
 
     var mod = null;
@@ -47,6 +65,37 @@ function Dpma(lib, lib_path, module_id) {
     if (! mod) {
         throw new Error(lib + " not available for this platform/architecture [tried " + module_paths.join(", ") + "]"); 
     } else return mod;
+}
+
+/**
+ * For 2nd->nth level references, you need to specify your module-usage chain
+ * so we can figure out the pathing correctly. Will be pulled off of the DPMA_REFS
+ * env variable unless another string is passed to replace it. Pass an empty-string
+ * to disable checking the environment key DPMA_REFS.
+ * @param {string} [in_ref_string] 
+ * @return {Object.<string,string>}
+ */
+function parseGlobalRefs(in_ref_string) {
+    if (in_ref_string == undefined) in_ref_string = process.env['DPMA_REFS'];
+    if (! in_ref_string) return {};
+
+    var refs = in_ref_string.split(/\;/);
+
+    var global_refs = {};
+
+    /**
+     * <module_id>=<l1_module>,[l2_module],[l3_module];...
+     */
+    for (var ref of refs) {
+        ref = ref.split(/\=/);
+        if (ref.length != 2) continue;
+        var module_id = ref[0];
+        var ref_chain = ref[1].split(/\,/);
+
+        global_refs[module_id] = ref_chain;
+    }
+
+    return global_refs;
 }
 
 /**
@@ -82,5 +131,16 @@ function exists(f) {
 
     return succ ? true : false;
 }
+
+/**
+ * Init Dpma fetch but disable global refs (very specific usage cases.)
+ * @param {string} lib 
+ * @param {string} [lib_path] 
+ * @param {string} [module_id] 
+ * @return {Object}
+ */
+Dpma.NoGlobalRefs = function(lib, lib_path, module_id) {
+    return Dpma(lib, lib_path, module_id, '');
+};
 
 module.exports = Dpma;
