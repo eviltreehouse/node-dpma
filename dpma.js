@@ -21,6 +21,8 @@ function Dpma(lib, lib_path, module_id, global_ref_string) {
     
     var platform = mapPlatform(process.platform);
     var arch     = mapArch(process.arch);
+    
+    var root_path = rootPath();
 
     var module_name = [lib, platform, arch].join("-") + ".node";
     var agn_module_name = lib + ".node";
@@ -52,13 +54,20 @@ function Dpma(lib, lib_path, module_id, global_ref_string) {
 
     var tries = [].concat(module_paths);
 
+    if (process.env['DPMA_DEBUG']) {
+        console.log('DPMA root', root_path);
+        console.log('DPMA refs', JSON.stringify(global_refs));
+        console.log(tries);
+    }
+    
     var mod = null;
     while (!mod && tries.length > 0) {
         var mp = tries.shift();
-        var abs_path = path.resolve(mp);
+        var abs_path = path.join(root_path, mp);
 
         if (exists(abs_path)) {
-            var mod = require(abs_path.replace(/\.node$/, ''));
+            var amp = abs_path.replace(/\.node$/, '');
+            var mod = eval("require(mod)");
         }
     }
 
@@ -130,6 +139,20 @@ function exists(f) {
     } catch(e) {}
 
     return succ ? true : false;
+}
+
+/**
+ * Finds the most rational root path available from which we deduce all
+ * of our pathing.
+ * @return {string}
+ */
+function rootPath() {
+    if (process.env['DPMA_ROOT']) return process.env['DPMA_ROOT'];
+    else if (process.cwd()) return process.cwd();
+
+    // project_dir/node_modules/node-hid-dpma/node_modules/node-dpma <- back to project_dir
+    else if (__dirname) return path.resolve(__dirname, '..', '..', '..', '..');
+    else return '.'; // This probably isn't ideal..
 }
 
 /**
