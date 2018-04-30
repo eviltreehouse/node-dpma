@@ -54,7 +54,7 @@ function Dpma(lib, lib_path, module_id, global_ref_string) {
 
     var tries = [].concat(module_paths);
 
-    if (process.env['DPMA_DEBUG']) {
+    if (debug()) {
         console.log('DPMA root', root_path);
         console.log('DPMA refs', JSON.stringify(global_refs));
         console.log(tries);
@@ -66,8 +66,14 @@ function Dpma(lib, lib_path, module_id, global_ref_string) {
         var abs_path = path.join(root_path, mp);
 
         if (exists(abs_path)) {
+            if (debug()) console.log(abs_path, 'exists loading.');
             var amp = abs_path.replace(/\.node$/, '');
-            var mod = eval("require(mod)");
+            try {
+                mod = eval("require(amp)");
+            } catch(e) {
+                if (debug()) console.error("failed to load ->", e.message);
+            }
+            if (mod && debug()) console.log('loaded ->', typeof mod);
         }
     }
 
@@ -153,6 +159,10 @@ function rootPath() {
     // project_dir/node_modules/node-hid-dpma/node_modules/node-dpma <- back to project_dir
     else if (__dirname) return path.resolve(__dirname, '..', '..', '..', '..');
     else return '.'; // This probably isn't ideal..
+}
+
+function debug() {
+    return parseInt(process.env['DPMA_DEBUG']) > 0;
 }
 
 /**
