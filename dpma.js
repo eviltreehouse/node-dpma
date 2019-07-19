@@ -1,84 +1,63 @@
+'use strict';
 const path = require('path');
 const fs = require('fs');
 
 /**
  * Dpma (Dynamic Platform Module Awareness)
  * Load the .node file for `lib` specified, based on the current
- * execution environment. Optionally specify `lib_path` if the files
- * are expected to be elsewhere from this module's directory. If you
- * specify `module_id`, it will attempt to look up the module from the
- * context of an "app root" (e.g. its running in a webpack'd application
- * and thus must look externally for its statically-bundled files.)
+ * execution environment. Optionally specify `sub_paths` if the modules
+ * are potentially in other locations (non-absolutes will be resolved 
+ * to the `__dirname` of the "main" module.
  * @param {string} lib 
- * @param {string} [lib_path="."] 
- * @param {string} [module_id] 
- * @param {string} [global_ref_string] 
+ * @param {string[]} [sub_paths] 
  * @return {Object}
  */
-function Dpma(lib, lib_path, module_id, global_ref_string) {
+function Dpma(lib, sub_paths) {
     if (! lib) throw new Error("No lib specified");
-    if (! lib_path) lib_path = ".";
+    if (! sub_paths || ! Array.isArray(sub_paths)) sub_paths = ["."];
+    let root_path = getProjectRoot();
     
-    var platform = mapPlatform(process.platform);
-    var arch     = mapArch(process.arch);
+    const platform = mapPlatform(process.platform);
+    const arch     = mapArch(process.arch);
     
-    var root_path = rootPath();
+    let module_name = [lib, platform, arch].join("-") + ".node";
 
-    var module_name = [lib, platform, arch].join("-") + ".node";
-    var agn_module_name = lib + ".node";
-
-    var module_paths = [];
-    module_paths.push( path.join(lib_path, module_name) );
-
-    if (module_id) module_paths.push( path.join(".", 'node_modules', module_id, lib_path, module_name ) );
-
-    // Add some platform/arch agnostic attempts to handle hand-built instances
-    module_paths.push( path.join(lib_path, agn_module_name) );
-    if (module_id) module_paths.push( path.join(".", 'node_modules', module_id, lib_path, agn_module_name ) );
-
-    var global_refs = parseGlobalRefs(global_ref_string);
-    if (module_id && global_refs[module_id]) {
-        // Our Dpma-enabled module is actually be used by a secondary module
-        // use its module directories as well.
-        var ref_path = ['node_modules'];
-        for (var ref_module of global_refs[module_id]) {
-            ref_path.push(ref_module);
-            ref_path.push('node_modules'); 
-        }
-
-        ref_path.push(module_id, lib_path);
-
-        module_paths.push( path.join.apply(path, [].concat(ref_path, module_name)) );
-        module_paths.push( path.join.apply(path, [].concat(ref_path, agn_module_name )) );
+    /** @type {string[]} */
+    let module_paths = [];
+    for (let sub_path of sub_paths) {
+        if (path.isAbsolute(sub_path)) module_paths.push( path.join(sub_path, module_name) );
+        else module_paths.push( path.join(root_path, sub_path, module_name ));
     }
 
     var tries = [].concat(module_paths);
 
     if (debug()) {
         console.log('DPMA root', root_path);
-        console.log('DPMA refs', JSON.stringify(global_refs));
-        console.log(tries);
+        console.log('searches', tries);
     }
     
     var mod = null;
-    while (!mod && tries.length > 0) {
+    while (tries.length > 0) {
         var mp = tries.shift();
-        var abs_path = path.join(root_path, mp);
 
-        if (exists(abs_path)) {
-            if (debug()) console.log(abs_path, 'exists loading.');
-            var amp = abs_path.replace(/\.node$/, '');
+        if (exists(mp)) {
+            if (debug()) console.log('--', mp, 'exists: requiring.');
+            let amp = mp.replace(/\.node$/, '');
             try {
-                mod = eval("require(amp)");
+                mod = eval(`require('${amp}')`);
             } catch(e) {
-                if (debug()) console.error("failed to load ->", e.message);
+                if (debug()) console.error("--- failed to require", e.message);
             }
-            if (mod && debug()) console.log('loaded ->', typeof mod);
+            if (mod && debug()) console.log('--- loaded ok ->', typeof mod);
+        } else {
+            if (debug()) console.log('--', mp, 'does not exist...');
         }
+
+        if (mod) break;
     }
 
     if (! mod) {
-        throw new Error(lib + " not available for this platform/architecture [tried " + module_paths.join(", ") + "]"); 
+        throw new Error(`${lib} not available for this platform/architecture`); 
     } else return mod;
 }
 
@@ -147,33 +126,15 @@ function exists(f) {
     return succ ? true : false;
 }
 
-/**
- * Finds the most rational root path available from which we deduce all
- * of our pathing.
- * @return {string}
- */
-function rootPath() {
-    if (process.env['DPMA_ROOT']) return process.env['DPMA_ROOT'];
-    else if (process.cwd()) return process.cwd();
-
-    // project_dir/node_modules/node-hid-dpma/node_modules/node-dpma <- back to project_dir
-    else if (__dirname) return path.resolve(__dirname, '..', '..', '..', '..');
-    else return '.'; // This probably isn't ideal..
-}
-
 function debug() {
     return parseInt(process.env['DPMA_DEBUG']) > 0;
 }
 
 /**
- * Init Dpma fetch but disable global refs (very specific usage cases.)
- * @param {string} lib 
- * @param {string} [lib_path] 
- * @param {string} [module_id] 
- * @return {Object}
+ * @return {string}
  */
-Dpma.NoGlobalRefs = function(lib, lib_path, module_id) {
-    return Dpma(lib, lib_path, module_id, '');
-};
+function getProjectRoot() {
+    return path.dirname(require.main.filename);
+}
 
 module.exports = Dpma;
