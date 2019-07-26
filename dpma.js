@@ -195,7 +195,10 @@ function debug() {
  * @return {string}
  */
 function getProjectRoot() {
-    return path.dirname(require.main.filename);
+    if (process.versions['electron']) {
+        /** @todo */
+        return require.main.require('electron').app.getAppPath();
+    } else return path.dirname(require.main.filename);
 }
 
 module.exports = Dpma;
