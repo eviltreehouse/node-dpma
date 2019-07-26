@@ -13,7 +13,7 @@ const fs = require('fs');
  * @return {Object}
  */
 function Dpma(lib, sub_paths) {
-    if (! lib) throw new Error("No lib specified");
+    if (! lib) throw new Error('No lib specified');
     if (! sub_paths || ! Array.isArray(sub_paths)) sub_paths = ["."];
     let root_path = getProjectRoot();
     
@@ -40,17 +40,17 @@ function Dpma(lib, sub_paths) {
     while (tries.length > 0) {
         var mp = tries.shift();
 
-        if (exists(mp)) {
-            if (debug()) console.log('--', mp, 'exists: requiring.');
+        if (exists(mp) && isValidNodeExtension(mp)) {
+            if (debug()) console.log('--', mp, 'exists/looks usable: requiring.');
             let amp = mp.replace(/\.node$/, '');
             try {
                 mod = eval(`require('${amp}')`);
             } catch(e) {
-                if (debug()) console.error("--- failed to require", e.message);
+                if (debug()) console.error('--- failed to require ->', e.message);
             }
             if (mod && debug()) console.log('--- loaded ok ->', typeof mod);
         } else {
-            if (debug()) console.log('--', mp, 'does not exist...');
+            if (debug()) console.log('--', mp, 'does not exist [or is not a valid native extension.]');
         }
 
         if (mod) break;
@@ -124,6 +124,67 @@ function exists(f) {
     } catch(e) {}
 
     return succ ? true : false;
+}
+
+/**
+ * Determine if a file appears to be a valid native extension
+ *  -   Darwin: 0xDF 0xFA 0xED 0xFE
+ *  -   Win32: 0x4D 0x5A ("MZ") ... 0x50 0x45 0x0 0x0 ("PE\0\0") (in top 516b of file.)
+ *  -   Linux: 0x7F 0x45 0x4C 0x46 ("ELF")
+ * @param {string} f 
+ * @return {boolean}
+ */
+function isValidNodeExtension(f) {
+    let valid = false;
+    let magick = null;
+    let b = null;
+
+    switch (mapPlatform(process.platform)) {
+        case 'darwin':
+            magick = Buffer.from([0xCF, 0xFA, 0xED, 0xFE]);
+            b = headerRead(f, 4);
+            if (b) valid = b.includes(magick);
+            break;
+
+        case 'linux':
+            magick = Buffer.from([0x7F, 0x45, 0x4C, 0x46]);
+            b = headerRead(f, 4);
+            if (b) valid = b.includes(magick);
+            break;
+
+        case 'ia32': 
+            let peh = Buffer.from([0x50, 0x45, 0x0, 0x0]);
+            b = headerRead(f, 516);
+            if (b) valid = b[0] === 0x4D && b[1] === 0x5A && b.includes(peh);
+            break;
+
+        default:
+            // unsupported
+            break;
+    }
+
+    if (debug()) {
+        console.log('-- is', f, 'valid extension?', (valid ? "Y" : "N"));
+    }
+
+    return valid;
+}
+
+/**
+ * @param {string} f 
+ * @param {number} siz
+ * @return {Buffer|null}
+ */
+function headerRead(f, siz) {
+    let ret = null;
+    try {
+        let fd = fs.openSync(f, 'r');
+        let b = Buffer.alloc(siz, 0x0);
+        fs.readSync(fd, b, 0, siz, 0);
+        ret = b;
+    } catch(e) {}
+
+    return ret;
 }
 
 function debug() {
