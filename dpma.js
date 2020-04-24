@@ -152,7 +152,7 @@ function isValidNodeExtension(f) {
             if (b) valid = b.includes(magick);
             break;
 
-        case 'ia32': 
+        case 'win32': 
             let peh = Buffer.from([0x50, 0x45, 0x0, 0x0]);
             b = headerRead(f, 516);
             if (b) valid = b[0] === 0x4D && b[1] === 0x5A && b.includes(peh);
